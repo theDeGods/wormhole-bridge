@@ -64,3 +64,29 @@ make integration-test
 # unit tests and local-validator integration tests
 make test
 ```
+
+# Storage Layout Verification
+
+The following script compares the storage layout of any verified `DeBridge` contract (`verified` on `etherscan` or `polygonscan`) with the local implementation. Before running the script, you will need to install the `ethereum-sources-downloader`. Also, make sure to have a working python environment with the following installed dependencies:
+
+- pandas
+- argparse
+
+Next, open the `verify_storage_layout.sh` file and configure the following arguments depending on the target smart contract and network you wish to verify:
+
+```
+# 20-byte hex encoded address
+CONTRACT_ADDRESS=
+
+# polygonscan or etherscan
+API=
+
+# contract name (e.g. y00tsV2)
+CONTRACT=
+```
+
+Finally, run the verification script:
+
+```
+bash shell-scripts/verify_storage_layout.sh
+```

@@ -50,6 +50,8 @@ contract y00tsV3 is
 	uint256 private _gasTokenAmountOnMint;
 	// Dictionary of VAA hash => flag that keeps track of claimed VAAs
 	mapping(bytes32 => bool) private _claimedVaas;
+	// Storage gap so that future upgrades to the contract can add new storage variables.
+	uint256[50] __gap;
 
 	error WrongEmitterChainId();
 	error WrongEmitterAddress();
@@ -59,6 +61,7 @@ contract y00tsV3 is
 	error BaseUriEmpty();
 	error BaseUriTooLong();
 	error InvalidMsgValue();
+	error FailedToSend();
 
 	event Minted(uint256 indexed tokenId, address indexed receiver);
 	event BatchMinted(uint256[] indexed tokenIds, address indexed receiver);
@@ -143,13 +146,13 @@ contract y00tsV3 is
 	 * a single token ID and a recipient address.
 	 */
 	function receiveAndMint(bytes calldata vaa) external payable {
-		IWormhole.VM memory vm = verifyMintMessage(vaa);
+		IWormhole.VM memory vm = _verifyMintMessage(vaa);
 
 		(uint256 tokenId, address evmRecipient) = parsePayload(vm.payload);
 		_safeMint(evmRecipient, tokenId);
 		emit Minted(tokenId, evmRecipient);
 
-		handleGasDropOff(evmRecipient);
+		_handleGasDropOff(evmRecipient);
 	}
 
 	/**
@@ -160,7 +163,7 @@ contract y00tsV3 is
 	 * a list of token IDs and a recipient address.
 	 */
 	function receiveAndMintBatch(bytes calldata vaa) external payable {
-		IWormhole.VM memory vm = verifyMintMessage(vaa);
+		IWormhole.VM memory vm = _verifyMintMessage(vaa);
 
 		(uint256[] memory tokenIds, address evmRecipient) = parseBatchPayload(vm.payload);
 
@@ -174,14 +177,18 @@ contract y00tsV3 is
 		}
 		emit BatchMinted(tokenIds, evmRecipient);
 
-		handleGasDropOff(evmRecipient);
+		_handleGasDropOff(evmRecipient);
 	}
 
-	function handleGasDropOff(address evmRecipient) internal {
+	function _handleGasDropOff(address evmRecipient) internal {
 		if (msg.sender != evmRecipient) {
 			if (msg.value != _gasTokenAmountOnMint) revert InvalidMsgValue();
 
-			payable(evmRecipient).transfer(msg.value);
+			// This external call is safe from reentrancy due to the vaa replay protection
+			// in the calling function.
+			(bool sent, ) = evmRecipient.call{value: msg.value}("");
+			if (!sent) revert FailedToSend();
+
 			_dustToken.safeTransferFrom(msg.sender, evmRecipient, _dustAmountOnMint);
 		}
 		//if the recipient relays the message themselves then they must not include any gas token
@@ -227,7 +234,7 @@ contract y00tsV3 is
 		return (tokenIds, evmRecipient);
 	}
 
-	function verifyMintMessage(bytes calldata vaa) internal returns (IWormhole.VM memory) {
+	function _verifyMintMessage(bytes calldata vaa) internal returns (IWormhole.VM memory) {
 		(IWormhole.VM memory vm, bool valid, string memory reason) = _wormhole.parseAndVerifyVM(
 			vaa
 		);

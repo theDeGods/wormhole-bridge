@@ -64,7 +64,7 @@ contract y00tsV3 is
 	error FailedToSend();
 
 	event Minted(uint256 indexed tokenId, address indexed receiver);
-	event BatchMinted(uint256[] indexed tokenIds, address indexed receiver);
+	event BatchMinted(uint256[] tokenIds, address indexed receiver);
 
 	//constructor for the logic(!) contract
 	constructor(

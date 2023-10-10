@@ -501,6 +501,19 @@ describe("Ethereum Migration", () => {
         });
       expect(receipt).is.not.null;
 
+      // Verify Batch Minted event.
+      const event = receipt!.events!.filter(
+        (e) => e.event === "BatchMinted"
+      )[0];
+      expect(event).is.not.null;
+
+      const eventTokenIds = event.args!.tokenIds;
+      const eventReceiver = event.args!.receiver;
+      for (let i = 0; i < eventTokenIds.length; i++) {
+        expect(eventTokenIds[i].eq(localVars["batch"][i])).is.true;
+      }
+      expect(eventReceiver).to.equal(ethRecipient.address);
+
       // Fetch the balance of the recipient after the mint.
       const balanceAfter = await ethereum.balanceOf(ethRecipient.address);
       const ethBalanceAfter = await ethProvider.getBalance(

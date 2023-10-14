@@ -44,6 +44,8 @@ contract y00tsV3 is
 	// Common URI for all NFTs handled by this contract.
 	bytes32 private immutable _baseUri;
 	uint8 private immutable _baseUriLength;
+	// Contract that keeps track of allowlisted and blocklisted addresses and code hashes.
+	IRegistry public immutable registry;
 
 	// Amount of DUST to transfer to the minter on upon relayed mint.
 	uint256 private _dustAmountOnMint;
@@ -52,8 +54,6 @@ contract y00tsV3 is
 	// Dictionary of VAA hash => flag that keeps track of claimed VAAs
 	mapping(bytes32 => bool) private _claimedVaas;
 
-	// Contract that keeps track of allowlisted and blocklisted addresses and code hashes.
-	IRegistry public _registry;
 	// Storage gap so that future upgrades to the contract can add new storage variables.
 	uint256[50] __gap;
 
@@ -76,7 +76,7 @@ contract y00tsV3 is
 		IERC20 dustToken,
 		bytes32 emitterAddress,
 		bytes memory baseUri,
-		IRegistry registry
+		IRegistry registryContract
 	) {
 		if (baseUri.length == 0) {
 			revert BaseUriEmpty();
@@ -90,7 +90,8 @@ contract y00tsV3 is
 		_emitterAddress = emitterAddress;
 		_baseUri = bytes32(baseUri);
 		_baseUriLength = uint8(baseUri.length);
-		_registry = IRegistry(registry);
+		
+		registry = registryContract;
 
 		//brick logic contract
 		initialize("", "", 0, 0, address(1), 0);
@@ -373,6 +374,6 @@ contract y00tsV3 is
   view
   returns (bool)
   {
-    return _registry.isAllowedOperator(operator);
+    return registry.isAllowedOperator(operator);
   }
 }

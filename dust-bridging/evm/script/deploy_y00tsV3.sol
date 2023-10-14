@@ -35,7 +35,7 @@ contract ContractScript is Script {
 	// Ethereum Wormhole devnet
 	IWormhole wormhole = IWormhole(0x706abc4E45D419950511e474C7B9Ed348A4a716c);
 	IERC20 dustToken = IERC20(0xAD290867AEFFA008cDC182dC1092bFB378340Ba8); 
-	IRegistry registry = IRegistry(0xAD290867AEFFA008cDC182dC1092bFB378340Ba8);
+	IRegistry registry = IRegistry(0x0E6eA3a2724E1ea5CFBb738307295fCF94f88B24);
 
 	y00tsV3 nft;
 

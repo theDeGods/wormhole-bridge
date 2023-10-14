@@ -10,6 +10,8 @@ import "wormhole-solidity/BytesLib.sol";
 import "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
+import {IRegistry} from "registry/IRegistry.sol";
+import {MockRegistry} from "./MockRegistry.sol" ;
 
 import {IERC721Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC721/IERC721Upgradeable.sol";
 import {IERC2981Upgradeable} from "@openzeppelin/contracts-upgradeable/interfaces/IERC2981Upgradeable.sol";
@@ -61,6 +63,9 @@ contract TestY00tsMigration is TestHelpers {
 		deployed.wormholeSimulator = new FakeWormholeSimulator(mockWormhole);
 		deployed.wormholeSimulator.setMessageFee(wormholeFee);
 
+		MockRegistry mockRegistry = new MockRegistry();
+		deployed.registry = mockRegistry;
+
 		// address(this) receives the dust tokens.
 		deployed.dustToken = new MockDust(dustAmountOnMint * 10);
 
@@ -105,7 +110,8 @@ contract TestY00tsMigration is TestHelpers {
 			ethereum.wormhole,
 			ethereum.dustToken,
 			ethereum.acceptedEmitter,
-			baseUri
+			baseUri,
+			ethereum.registry
 		);
 		ERC1967Proxy proxy = new ERC1967Proxy(
 			address(nftImplementation),
@@ -171,7 +177,8 @@ contract TestY00tsMigration is TestHelpers {
 				ethereum.wormhole,
 				ethereum.dustToken,
 				ethereum.acceptedEmitter,
-				baseUri
+				baseUri,
+				ethereum.registry
 			)
 		);
 
@@ -198,7 +205,8 @@ contract TestY00tsMigration is TestHelpers {
 				ethereum.wormhole,
 				ethereum.dustToken,
 				ethereum.acceptedEmitter,
-				baseUri
+				baseUri,
+				ethereum.registry
 			)
 		);
 

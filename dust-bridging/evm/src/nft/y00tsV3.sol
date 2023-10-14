@@ -11,9 +11,10 @@ import {IWormhole} from "wormhole-solidity/IWormhole.sol";
 import {BytesLib} from "wormhole-solidity/BytesLib.sol";
 import {ERC5058Upgradeable} from "ERC5058/ERC5058Upgradeable.sol";
 import {IERC5192} from "ERC5192/IERC5192.sol";
+import {IRegistry} from "registry/IRegistry.sol";
 
 /**
- * @title  DeBridge
+ * @title  y00tsV3
  * @notice ERC721 that mints tokens based on VAAs.
  */
 contract y00tsV3 is
@@ -50,6 +51,9 @@ contract y00tsV3 is
 	uint256 private _gasTokenAmountOnMint;
 	// Dictionary of VAA hash => flag that keeps track of claimed VAAs
 	mapping(bytes32 => bool) private _claimedVaas;
+
+	// Contract that keeps track of allowlisted and blocklisted addresses and code hashes.
+	IRegistry public _registry;
 	// Storage gap so that future upgrades to the contract can add new storage variables.
 	uint256[50] __gap;
 
@@ -71,7 +75,8 @@ contract y00tsV3 is
 		IWormhole wormhole,
 		IERC20 dustToken,
 		bytes32 emitterAddress,
-		bytes memory baseUri
+		bytes memory baseUri,
+		IRegistry registry
 	) {
 		if (baseUri.length == 0) {
 			revert BaseUriEmpty();
@@ -85,6 +90,7 @@ contract y00tsV3 is
 		_emitterAddress = emitterAddress;
 		_baseUri = bytes32(baseUri);
 		_baseUriLength = uint8(baseUri.length);
+		_registry = IRegistry(registry);
 
 		//brick logic contract
 		initialize("", "", 0, 0, address(1), 0);
@@ -257,13 +263,26 @@ contract y00tsV3 is
 
 	// ---- ERC5058 ----
 
+  /**
+    * @notice Checks whether msg.sender is valid on the registry. If not, it will
+    * block the transfer of the token.
+		* Checks wether the tokenId is locked. If it is, it will block the transfer of the token.
+    * @param from - Address token is transferring from
+    * @param to - Address token is transferring to
+    * @param tokenId - Token ID being transfered
+    * @param batchSize - Batch size
+    */
 	function _beforeTokenTransfer(
 		address from,
 		address to,
 		uint256 tokenId,
 		uint256 batchSize
 	) internal virtual override(ERC5058Upgradeable) {
-		ERC5058Upgradeable._beforeTokenTransfer(from, to, tokenId, batchSize);
+		if (_isValidAgainstRegistry(msg.sender)) {
+      ERC5058Upgradeable._beforeTokenTransfer(from, to, tokenId, batchSize);
+    } else {
+      revert IRegistry.NotAllowed();
+    }
 	}
 
 	function _afterTokenTransfer(
@@ -342,4 +361,18 @@ contract y00tsV3 is
 	function resetTokenRoyalty(uint256 tokenId) external onlyOwner {
 		_resetTokenRoyalty(tokenId);
 	}
+
+	// ---- IRegistry ----
+
+	  /**
+    * @notice Checks whether operator is valid on the registry. Will return true if registry isn't active.
+    * @param operator - Operator address
+    */
+  function _isValidAgainstRegistry(address operator)
+  internal
+  view
+  returns (bool)
+  {
+    return _registry.isAllowedOperator(operator);
+  }
 }

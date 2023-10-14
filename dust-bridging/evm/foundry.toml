@@ -20,6 +20,7 @@ remappings = [
     "opensea/=modules/opensea",
     "ERC5058/=modules/ERC5058",
     "ERC5192/=modules/ERC5192",
+    "registry/=modules/registry",
 ]
 
 # See more config options https://github.com/foundry-rs/foundry/tree/master/config

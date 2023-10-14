@@ -4,6 +4,7 @@ pragma solidity ^0.8.9;
 import {IWormhole} from "wormhole-solidity/IWormhole.sol";
 import {WormholeSimulator, FakeWormholeSimulator} from "wormhole-solidity/WormholeSimulator.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IRegistry} from "registry/IRegistry.sol";
 
 import {y00tsV2} from "../src/nft/y00tsV2.sol";
 import {y00tsV3} from "../src/nft/y00tsV3.sol";
@@ -49,8 +50,9 @@ contract TestY00tsV3 is y00tsV3 {
 		IWormhole wormhole,
 		IERC20 dustToken,
 		bytes32 emitterAddress,
-		bytes memory baseUri
-	) y00tsV3(wormhole, dustToken, emitterAddress, baseUri) {}
+		bytes memory baseUri,
+		IRegistry registry
+	) y00tsV3(wormhole, dustToken, emitterAddress, baseUri, registry) {}
 
 	function mintTestOnly(address recipient, uint16 tokenId) public {
 		_safeMint(recipient, uint256(tokenId));
@@ -86,6 +88,7 @@ contract TestHelpers is Test {
 		WormholeSimulator wormholeSimulator;
 		IWormhole wormhole;
 		bytes32 acceptedEmitter;
+		IRegistry registry;
 	}
 
 	function createBatchAndMint(

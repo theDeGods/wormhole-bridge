@@ -6,7 +6,7 @@ import "forge-std/Script.sol";
 import "forge-std/console.sol";
 
 import {IWormhole} from "wormhole-solidity/IWormhole.sol";
-import {y00tsV3} from "../src/nft/y00tsV3.sol";
+import {y00ts} from "../src/nft/y00tsV3.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "wormhole-solidity/BytesLib.sol";
 import "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
@@ -29,11 +29,11 @@ contract ContractScript is Script {
 	IWormhole wormhole = IWormhole(0x98f3c9e6E3fAce36bAAd05FE09d375Ef1464288B);
 	IERC20 dustToken = IERC20(0xB5b1b659dA79A2507C27AaD509f15B4874EDc0Cc);
 
-	y00tsV3 nft;
+	y00ts nft;
 
 	function deployContract() public {
 		//Deploy our contract for testing
-		y00tsV3 nftImplementation = new y00tsV3(wormhole, dustToken, minterAddress, baseUri);
+		y00ts nftImplementation = new y00ts(wormhole, dustToken, minterAddress, baseUri);
 		ERC1967Proxy proxy = new ERC1967Proxy(
 			address(nftImplementation),
 			abi.encodeCall(
@@ -48,7 +48,7 @@ contract ContractScript is Script {
 				)
 			)
 		);
-		nft = y00tsV3(address(proxy));
+		nft = y00ts(address(proxy));
 	}
 
 	function run() public {

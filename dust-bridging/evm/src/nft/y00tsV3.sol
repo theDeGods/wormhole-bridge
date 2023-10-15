@@ -9,27 +9,33 @@ import {ERC2981Upgradeable} from "@openzeppelin/contracts-upgradeable/token/comm
 import {Ownable2StepUpgradeable} from "@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
 import {IWormhole} from "wormhole-solidity/IWormhole.sol";
 import {BytesLib} from "wormhole-solidity/BytesLib.sol";
-import {ERC5058Upgradeable} from "ERC5058/ERC5058Upgradeable.sol";
-import {IERC5192} from "ERC5192/IERC5192.sol";
+
+                                                                                
+//                                                      @@@@@@              @@   
+//   @@@@@@    @@@@@   @@@@@@@@@@@      @@@@@@@@@@@     @@@@@@                   
+//   @@@@@@   @@@@@@ @@@@@@@@@@@@@@   @@@@@@@@@@@@@@  @@@@@@@@@@@  @@@@@@@@@@    
+//    @@@@@@  @@@@@/@@@@@@    @@@@@@ @@@@@@    @@@@@@ @@@@@@@@@@@ @@@@@@(@@@     
+//     @@@@@%@@@@@@ @@@@@      @@@@@ @@@@@      @@@@@   @@@@@@    @@@@@@@@       
+//     @@@@@@@@@@@@ @@@@@@     @@@@@ @@@@@@     @@@@@   @@@@@@     @@@@@@@@@@    
+//      @@@@@@@@@@   @@@@@@@@@@@@@@@  @@@@@@@@@@@@@@@   @@@@@@         @@@@@@@   
+//      &@@@@@@@@     @@@@@@@@@@@@&    @@@@@@@@@@@@&     @@@@@@@@ @@@@@@@@@@@    
+//  @@@@@@@@@@@.        &@@@@@@@         &@@@@@@@          @@@@@@ @@@@@@@@@      
+//  @@@@@@@@                                                                     
 
 /**
- * @title  DeBridge
- * @notice ERC721 that mints tokens based on VAAs.
+ * @title  y00ts ERC-721 Smart Contract
  */
-contract y00tsV3 is
-	ERC5058Upgradeable,
-	IERC5192,
+contract y00ts is
 	UUPSUpgradeable,
 	ERC2981Upgradeable,
-	Ownable2StepUpgradeable
+	Ownable2StepUpgradeable,
+	ERC721Upgradeable
 {
 	using BytesLib for bytes;
 	using SafeERC20 for IERC20;
 
 	// Wormhole chain id that valid vaas must have -- must be Polygon.
 	uint16 constant SOURCE_CHAIN_ID = 5;
-	uint256 private constant MAX_EXPIRE_TIME =
-		0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff;
 
 	// -- immutable members (baked into the code by the constructor of the logic contract)
 
@@ -251,51 +257,6 @@ contract y00tsV3 is
 		return vm;
 	}
 
-	function locked(uint256 tokenId) external view override returns (bool) {
-		return isLocked(tokenId);
-	}
-
-	// ---- ERC5058 ----
-
-	function _beforeTokenTransfer(
-		address from,
-		address to,
-		uint256 tokenId,
-		uint256 batchSize
-	) internal virtual override(ERC5058Upgradeable) {
-		ERC5058Upgradeable._beforeTokenTransfer(from, to, tokenId, batchSize);
-	}
-
-	function _afterTokenTransfer(
-		address from,
-		address to,
-		uint256 tokenId,
-		uint256 batchSize
-	) internal virtual override(ERC5058Upgradeable) {
-		ERC5058Upgradeable._afterTokenTransfer(from, to, tokenId, batchSize);
-	}
-
-	function _beforeTokenLock(
-		address operator,
-		address owner,
-		uint256 tokenId,
-		uint256 expired
-	) internal virtual override {
-		super._beforeTokenLock(operator, owner, tokenId, expired);
-		require(expired == 0 || expired == MAX_EXPIRE_TIME, "Auto expiration is not supported.");
-
-		// Emit events for ERC5192
-		if (expired != 0) {
-			emit Locked(tokenId);
-		} else {
-			emit Unlocked(tokenId);
-		}
-	}
-
-	function _burn(uint256 tokenId) internal virtual override(ERC5058Upgradeable) {
-		ERC5058Upgradeable._burn(tokenId);
-	}
-
 	// ---- ERC721 ----
 
 	function tokenURI(uint256 tokenId) public view virtual override returns (string memory) {
@@ -314,11 +275,10 @@ contract y00tsV3 is
 
 	function supportsInterface(
 		bytes4 interfaceId
-	) public view virtual override(ERC5058Upgradeable, ERC2981Upgradeable) returns (bool) {
+	) public view virtual override(ERC2981Upgradeable, ERC721Upgradeable) returns (bool) {
 		return
-			interfaceId == type(IERC5192).interfaceId ||
-			ERC5058Upgradeable.supportsInterface(interfaceId) ||
-			super.supportsInterface(interfaceId);
+			ERC2981Upgradeable.supportsInterface(interfaceId) ||
+			ERC721Upgradeable.supportsInterface(interfaceId);
 	}
 
 	// ---- ERC2981 ----

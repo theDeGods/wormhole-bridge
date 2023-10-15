@@ -136,14 +136,12 @@ contract TestY00tsMigration is TestHelpers {
 	 * ERC165 Test
 	 */
 
-	function testSupportsInterfaceY00tsV2() public {
-		assertTrue(ethereumNft.supportsInterface(type(IERC5192).interfaceId));
-		assertTrue(ethereumNft.supportsInterface(type(IERC5058Upgradeable).interfaceId));
+	function testSupportsInterfaceY00tsV3() public {
 		assertTrue(ethereumNft.supportsInterface(type(IERC2981Upgradeable).interfaceId));
 		assertTrue(ethereumNft.supportsInterface(type(IERC721Upgradeable).interfaceId));
 	}
 
-	function testSupportsInterfaceY00tsV3() public {
+	function testSupportsInterfaceY00tsV2() public {
 		assertTrue(polygonNft.supportsInterface(type(IERC5192).interfaceId));
 		assertTrue(polygonNft.supportsInterface(type(IERC5058Upgradeable).interfaceId));
 		assertTrue(polygonNft.supportsInterface(type(IERC2981Upgradeable).interfaceId));
@@ -243,30 +241,6 @@ contract TestY00tsMigration is TestHelpers {
 		polygonNft.getAmountsOnMint();
 	}
 
-	function testLockedY00tsV3() public {
-		uint256 tokenId = 5;
-		address owner = makeAddr("owner");
-
-		vm.startPrank(owner);
-
-		ethereumNft.mintTestOnly(owner, uint16(tokenId));
-
-		assertFalse(ethereumNft.locked(tokenId));
-
-		// lock the token
-		ethereumNft.lock(
-			tokenId,
-			0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
-		);
-		assertTrue(ethereumNft.locked(tokenId));
-
-		// unlock the token
-		ethereumNft.unlock(tokenId);
-		assertFalse(ethereumNft.locked(tokenId));
-
-		vm.stopPrank();
-	}
-
 	function testLockedY00tsV2() public {
 		uint256 tokenId = 5;
 		address owner = makeAddr("owner");
@@ -289,21 +263,6 @@ contract TestY00tsMigration is TestHelpers {
 		assertFalse(polygonNft.locked(tokenId));
 
 		vm.stopPrank();
-	}
-
-	function testCannotLockAutoExpoNotSupportedY00tsV3() public {
-		uint256 tokenId = 5;
-		address owner = makeAddr("owner");
-
-		ethereumNft.mintTestOnly(owner, uint16(tokenId));
-
-		vm.prank(owner);
-
-		vm.expectRevert("Auto expiration is not supported.");
-		ethereumNft.lock(
-			tokenId,
-			10 // nonzero or non-max value
-		);
 	}
 
 	function testCannotLockAutoExpoNotSupportedY00tsV2() public {

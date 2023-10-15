@@ -114,8 +114,6 @@ contract TestY00tsMigration is TestHelpers {
 				(
 					name,
 					symbol,
-					dustAmountOnMint,
-					gasTokenAmountOnMint,
 					royaltyReceiver,
 					royaltyFeeNumerator
 				)
@@ -136,14 +134,12 @@ contract TestY00tsMigration is TestHelpers {
 	 * ERC165 Test
 	 */
 
-	function testSupportsInterfaceY00tsV2() public {
-		assertTrue(ethereumNft.supportsInterface(type(IERC5192).interfaceId));
-		assertTrue(ethereumNft.supportsInterface(type(IERC5058Upgradeable).interfaceId));
+	function testSupportsInterfaceY00tsV3() public {
 		assertTrue(ethereumNft.supportsInterface(type(IERC2981Upgradeable).interfaceId));
 		assertTrue(ethereumNft.supportsInterface(type(IERC721Upgradeable).interfaceId));
 	}
 
-	function testSupportsInterfaceY00tsV3() public {
+	function testSupportsInterfaceY00tsV2() public {
 		assertTrue(polygonNft.supportsInterface(type(IERC5192).interfaceId));
 		assertTrue(polygonNft.supportsInterface(type(IERC5058Upgradeable).interfaceId));
 		assertTrue(polygonNft.supportsInterface(type(IERC2981Upgradeable).interfaceId));
@@ -208,28 +204,6 @@ contract TestY00tsMigration is TestHelpers {
 		TestY00tsV2(address(ethereumNft)).upgradeTo(newImplementation);
 	}
 
-	function testUpdateAmountsOnMintY00tsV3(
-		uint256 newDustAmount,
-		uint256 newGasTokenAmount
-	) public {
-		// update the dust and gas token amounts
-		ethereumNft.updateAmountsOnMint(newDustAmount, newGasTokenAmount);
-
-		// verify the new amounts
-		(uint256 dustAmount, uint256 gasTokenAmount) = ethereumNft.getAmountsOnMint();
-		assertEq(dustAmount, newDustAmount);
-		assertEq(gasTokenAmount, newGasTokenAmount);
-	}
-
-	function testCannotUpdateAmountsOnMintY00tsV3OwnerOnly() public {
-		uint256 newDustAmount = 69420;
-		uint256 newGasTokenAmount = 42069;
-
-		vm.prank(makeAddr("0xdeadbeef"));
-		vm.expectRevert("Ownable: caller is not the owner");
-		ethereumNft.updateAmountsOnMint(newDustAmount, newGasTokenAmount);
-	}
-
 	function testCannotUpdateAmountsOnMintY00tsV2Deprecated() public {
 		uint256 newDustAmount = 69420;
 		uint256 newGasTokenAmount = 42069;
@@ -241,30 +215,6 @@ contract TestY00tsMigration is TestHelpers {
 	function testCannotGetAmountsOnMintY00tsV2Deprecated() public {
 		vm.expectRevert(abi.encodeWithSignature("Deprecated()"));
 		polygonNft.getAmountsOnMint();
-	}
-
-	function testLockedY00tsV3() public {
-		uint256 tokenId = 5;
-		address owner = makeAddr("owner");
-
-		vm.startPrank(owner);
-
-		ethereumNft.mintTestOnly(owner, uint16(tokenId));
-
-		assertFalse(ethereumNft.locked(tokenId));
-
-		// lock the token
-		ethereumNft.lock(
-			tokenId,
-			0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
-		);
-		assertTrue(ethereumNft.locked(tokenId));
-
-		// unlock the token
-		ethereumNft.unlock(tokenId);
-		assertFalse(ethereumNft.locked(tokenId));
-
-		vm.stopPrank();
 	}
 
 	function testLockedY00tsV2() public {
@@ -289,21 +239,6 @@ contract TestY00tsMigration is TestHelpers {
 		assertFalse(polygonNft.locked(tokenId));
 
 		vm.stopPrank();
-	}
-
-	function testCannotLockAutoExpoNotSupportedY00tsV3() public {
-		uint256 tokenId = 5;
-		address owner = makeAddr("owner");
-
-		ethereumNft.mintTestOnly(owner, uint16(tokenId));
-
-		vm.prank(owner);
-
-		vm.expectRevert("Auto expiration is not supported.");
-		ethereumNft.lock(
-			tokenId,
-			10 // nonzero or non-max value
-		);
 	}
 
 	function testCannotLockAutoExpoNotSupportedY00tsV2() public {
@@ -565,8 +500,7 @@ contract TestY00tsMigration is TestHelpers {
 			ethereum.acceptedEmitter
 		);
 
-		(uint256 dustAmount, uint256 gasTokenAmount) = ethereumNft.getAmountsOnMint();
-		vm.deal(address(this), gasTokenAmount);
+		vm.deal(address(this), 0);
 
 		// We need to balance check after dealing the dust token.
 		Balances memory beforeBal = getBalances(
@@ -576,8 +510,7 @@ contract TestY00tsMigration is TestHelpers {
 			address(this)
 		);
 
-		ethereum.dustToken.approve(address(ethereumNft), dustAmount);
-		ethereumNft.receiveAndMint{value: gasTokenAmount}(mintVaa);
+		ethereumNft.receiveAndMint(mintVaa);
 
 		Balances memory afterBal = getBalances(
 			ethereum,
@@ -587,7 +520,7 @@ contract TestY00tsMigration is TestHelpers {
 		);
 
 		assertEq(ethereumNft.ownerOf(tokenId), fromWormholeFormat(userAddress));
-		assertBalanceCheckInbound(beforeBal, afterBal, dustAmount, gasTokenAmount, 1);
+		assertBalanceCheckInbound(beforeBal, afterBal, 0, 0, 1);
 	}
 
 	function testReceiveAndMintOnEthereumSelfRedemption(uint16 tokenId) public {
@@ -614,7 +547,7 @@ contract TestY00tsMigration is TestHelpers {
 
 		// self redeem
 		vm.prank(recipient);
-		ethereumNft.receiveAndMint{value: 0}(mintVaa);
+		ethereumNft.receiveAndMint(mintVaa);
 
 		Balances memory afterBal = getBalances(
 			ethereum,
@@ -627,45 +560,6 @@ contract TestY00tsMigration is TestHelpers {
 		assertBalanceCheckInbound(beforeBal, afterBal, 0, 0, 1);
 	}
 
-	function testCannotReceiveAndMintOnEthereumSelfRedemptionWithValue() public {
-		uint16 tokenId = 5;
-		address recipient = fromWormholeFormat(userAddress);
-
-		// craft a VAA sent from the Polygon contract to Ethereum
-		bytes memory mintVaa = craftValidVaa(
-			ethereum,
-			tokenId,
-			recipient,
-			polygonWormholeChain, // emitter chainId
-			ethereum.acceptedEmitter
-		);
-
-		// self redeem
-		vm.prank(recipient);
-		vm.expectRevert(); // forge is not reverting with data here (bug)
-		ethereumNft.receiveAndMint{value: 1}(mintVaa);
-	}
-
-	function testCannotReceiveAndMintOnEthereumInvalidMsgValue() public {
-		uint16 tokenId = 5;
-		address recipient = fromWormholeFormat(userAddress);
-
-		// craft a VAA sent from the Polygon contract to Ethereum
-		bytes memory mintVaa = craftValidVaa(
-			ethereum,
-			tokenId,
-			recipient,
-			polygonWormholeChain, // emitter chainId
-			ethereum.acceptedEmitter
-		);
-
-		require(gasTokenAmountOnMint > 0, "invalid amount");
-
-		// redeem with relayer, but set value to zero
-		vm.expectRevert(); // forge is not reverting with data here (bug)
-		ethereumNft.receiveAndMint{value: 0}(mintVaa);
-	}
-
 	function testCannotReceiveAndMintOnEthereumInvalidMessageLength() public {
 		bytes memory mintVaa = craftValidVaa(
 			ethereum,
@@ -675,7 +569,7 @@ contract TestY00tsMigration is TestHelpers {
 		);
 
 		vm.expectRevert(abi.encodeWithSignature("InvalidMessageLength()"));
-		ethereumNft.receiveAndMint{value: gasTokenAmountOnMint}(mintVaa);
+		ethereumNft.receiveAndMint(mintVaa);
 	}
 
 	function testCannotReceiveAndMintOnEthereumWrongEmitterAddress() public {
@@ -690,13 +584,10 @@ contract TestY00tsMigration is TestHelpers {
 			toWormholeFormat(makeAddr("spoofedEmitter"))
 		);
 
-		(uint256 dustAmount, uint256 gasTokenAmount) = ethereumNft.getAmountsOnMint();
-		vm.deal(address(this), gasTokenAmount);
-
-		ethereum.dustToken.approve(address(ethereumNft), dustAmount);
+		vm.deal(address(this), 0);
 
 		vm.expectRevert(abi.encodeWithSignature("WrongEmitterAddress()"));
-		ethereumNft.receiveAndMint{value: gasTokenAmount}(mintVaa);
+		ethereumNft.receiveAndMint(mintVaa);
 	}
 
 	function testCannotReceiveAndMintOnEthereumWrongEmitterChainId() public {
@@ -711,13 +602,10 @@ contract TestY00tsMigration is TestHelpers {
 			ethereum.acceptedEmitter
 		);
 
-		(uint256 dustAmount, uint256 gasTokenAmount) = ethereumNft.getAmountsOnMint();
-		vm.deal(address(this), gasTokenAmount);
-
-		ethereum.dustToken.approve(address(ethereumNft), dustAmount);
+		vm.deal(address(this), 0);
 
 		vm.expectRevert(abi.encodeWithSignature("WrongEmitterChainId()"));
-		ethereumNft.receiveAndMint{value: gasTokenAmount}(mintVaa);
+		ethereumNft.receiveAndMint(mintVaa);
 	}
 
 	function testCannotReceiveAndMintOnEthereumAgain() public {
@@ -732,23 +620,21 @@ contract TestY00tsMigration is TestHelpers {
 			ethereum.acceptedEmitter
 		);
 
-		(uint256 dustAmount, uint256 gasTokenAmount) = ethereumNft.getAmountsOnMint();
-		vm.deal(address(this), gasTokenAmount);
+		vm.deal(address(this), 0);
 
-		ethereum.dustToken.approve(address(ethereumNft), dustAmount);
-		ethereumNft.receiveAndMint{value: gasTokenAmount}(mintVaa);
+		ethereumNft.receiveAndMint(mintVaa);
 
 		// try to mint again
-		vm.deal(address(this), gasTokenAmount);
+		vm.deal(address(this), 0);
 		vm.expectRevert(); // forge is not reverting with data here (bug)
-		ethereumNft.receiveAndMint{value: gasTokenAmount}(mintVaa);
+		ethereumNft.receiveAndMint(mintVaa);
 	}
 
 	function testCannotReceiveAndMintOnEthereumInvalidVaa() public {
 		//craft a VAA sent from the Polygon contract to Ethereum
 		bytes memory mintVaa = hex"deadbeef";
 		vm.expectRevert("vm too small");
-		ethereumNft.receiveAndMint{value: gasTokenAmountOnMint}(mintVaa);
+		ethereumNft.receiveAndMint(mintVaa);
 	}
 
 	function testTokenURIOnEthereum(uint16 tokenId) public {
@@ -763,10 +649,8 @@ contract TestY00tsMigration is TestHelpers {
 			ethereum.acceptedEmitter
 		);
 
-		(uint256 dustAmount, uint256 gasTokenAmount) = ethereumNft.getAmountsOnMint();
-		ethereum.dustToken.approve(address(ethereumNft), dustAmount);
-		vm.deal(address(this), gasTokenAmount);
-		ethereumNft.receiveAndMint{value: gasTokenAmount}(mintVaa);
+		vm.deal(address(this), 0);
+		ethereumNft.receiveAndMint(mintVaa);
 
 		string memory uri = ethereumNft.tokenURI(tokenId);
 		assertEq(
@@ -807,8 +691,7 @@ contract TestY00tsMigration is TestHelpers {
 		);
 
 		// now receive and mint on Ethereum
-		(uint256 dustAmount, uint256 gasTokenAmount) = ethereumNft.getAmountsOnMint();
-		vm.deal(address(this), gasTokenAmount);
+		vm.deal(address(this), 0);
 
 		// We need to balance check after dealing the dust token.
 		Balances memory beforeBal = getBalances(
@@ -818,8 +701,7 @@ contract TestY00tsMigration is TestHelpers {
 			address(this)
 		);
 
-		ethereum.dustToken.approve(address(ethereumNft), dustAmount);
-		ethereumNft.receiveAndMint{value: gasTokenAmount}(mintVaa);
+		ethereumNft.receiveAndMint(mintVaa);
 
 		Balances memory afterBal = getBalances(
 			ethereum,
@@ -829,7 +711,7 @@ contract TestY00tsMigration is TestHelpers {
 		);
 
 		assertEq(ethereumNft.ownerOf(tokenId), fromWormholeFormat(userAddress));
-		assertBalanceCheckInbound(beforeBal, afterBal, dustAmount, gasTokenAmount, 1);
+		assertBalanceCheckInbound(beforeBal, afterBal, 0, 0, 1);
 	}
 
 	function testCannotForwardMessageWrongEmitterAddress() public {
@@ -1148,8 +1030,7 @@ contract TestY00tsMigration is TestHelpers {
 			createBatchPayload(tokenIds, recipient)
 		);
 
-		(uint256 dustAmount, uint256 gasTokenAmount) = ethereumNft.getAmountsOnMint();
-		vm.deal(address(this), gasTokenAmount);
+		vm.deal(address(this), 0);
 
 		// We need to balance check after dealing the dust token.
 		Balances memory beforeBal = getBalances(
@@ -1159,8 +1040,7 @@ contract TestY00tsMigration is TestHelpers {
 			address(this)
 		);
 
-		ethereum.dustToken.approve(address(ethereumNft), dustAmount);
-		ethereumNft.receiveAndMintBatch{value: gasTokenAmount}(batchVaa);
+		ethereumNft.receiveAndMintBatch(batchVaa);
 
 		Balances memory afterBal = getBalances(
 			ethereum,
@@ -1171,7 +1051,7 @@ contract TestY00tsMigration is TestHelpers {
 
 		// Confirm recipient is now owner of each nft in the batch, and validate
 		// the gas drop off.
-		assertBalanceCheckInbound(beforeBal, afterBal, dustAmount, gasTokenAmount, tokenCount);
+		assertBalanceCheckInbound(beforeBal, afterBal, 0, 0, tokenCount);
 		for (uint256 i = 0; i < tokenCount; i++) {
 			assertEq(ethereumNft.ownerOf(tokenIds[i]), recipient);
 		}
@@ -1189,16 +1069,14 @@ contract TestY00tsMigration is TestHelpers {
 			createBatchPayload(createBatchIds(tokenCount, start), fromWormholeFormat(userAddress))
 		);
 
-		(uint256 dustAmount, uint256 gasTokenAmount) = ethereumNft.getAmountsOnMint();
-		vm.deal(address(this), gasTokenAmount);
+		vm.deal(address(this), 0);
 
-		ethereum.dustToken.approve(address(ethereumNft), dustAmount);
-		ethereumNft.receiveAndMintBatch{value: gasTokenAmount}(batchVaa);
+		ethereumNft.receiveAndMintBatch(batchVaa);
 
 		// try to mint again
-		vm.deal(address(this), gasTokenAmount);
+		vm.deal(address(this), 0);
 		vm.expectRevert(); // forge is not reverting with data here (bug)
-		ethereumNft.receiveAndMintBatch{value: gasTokenAmount}(batchVaa);
+		ethereumNft.receiveAndMintBatch(batchVaa);
 	}
 
 	function testCannotReceiveAndMintBatchWrongEmitterChainId() public {
@@ -1213,12 +1091,10 @@ contract TestY00tsMigration is TestHelpers {
 			createBatchPayload(createBatchIds(tokenCount, start), fromWormholeFormat(userAddress))
 		);
 
-		(uint256 dustAmount, uint256 gasTokenAmount) = ethereumNft.getAmountsOnMint();
-		vm.deal(address(this), gasTokenAmount);
-		ethereum.dustToken.approve(address(ethereumNft), dustAmount);
+		vm.deal(address(this), 0);
 
 		vm.expectRevert(abi.encodeWithSignature("WrongEmitterChainId()"));
-		ethereumNft.receiveAndMintBatch{value: gasTokenAmount}(batchVaa);
+		ethereumNft.receiveAndMint(batchVaa);
 	}
 
 	function testCannotReceiveAndMintBatchWrongEmitterAddress() public {
@@ -1233,12 +1109,10 @@ contract TestY00tsMigration is TestHelpers {
 			createBatchPayload(createBatchIds(tokenCount, start), fromWormholeFormat(userAddress))
 		);
 
-		(uint256 dustAmount, uint256 gasTokenAmount) = ethereumNft.getAmountsOnMint();
-		vm.deal(address(this), gasTokenAmount);
-		ethereum.dustToken.approve(address(ethereumNft), dustAmount);
+		vm.deal(address(this), 0);
 
 		vm.expectRevert(abi.encodeWithSignature("WrongEmitterAddress()"));
-		ethereumNft.receiveAndMintBatch{value: gasTokenAmount}(batchVaa);
+		ethereumNft.receiveAndMint(batchVaa);
 	}
 
 	function testCannotReceiveAndMintBatchModuloNonzero() public {
@@ -1258,12 +1132,10 @@ contract TestY00tsMigration is TestHelpers {
 			abi.encodePacked(payload, hex"69")
 		);
 
-		(uint256 dustAmount, uint256 gasTokenAmount) = ethereumNft.getAmountsOnMint();
-		vm.deal(address(this), gasTokenAmount);
-		ethereum.dustToken.approve(address(ethereumNft), dustAmount);
+		vm.deal(address(this), 0);
 
 		vm.expectRevert(abi.encodeWithSignature("InvalidMessageLength()"));
-		ethereumNft.receiveAndMintBatch{value: gasTokenAmount}(batchVaa);
+		ethereumNft.receiveAndMint(batchVaa);
 	}
 
 	function testCannotReceiveAndMintBatchNotEnoughBytes() public {
@@ -1284,62 +1156,9 @@ contract TestY00tsMigration is TestHelpers {
 			payload
 		);
 
-		(uint256 dustAmount, uint256 gasTokenAmount) = ethereumNft.getAmountsOnMint();
-		vm.deal(address(this), gasTokenAmount);
-		ethereum.dustToken.approve(address(ethereumNft), dustAmount);
+		vm.deal(address(this), 0);
 
 		vm.expectRevert(abi.encodeWithSignature("InvalidMessageLength()"));
-		ethereumNft.receiveAndMintBatch{value: gasTokenAmount}(batchVaa);
-	}
-
-	function testCannotReceiveAndMintBatchInvalidMessageValueSelfRedeem() public {
-		uint256 tokenCount = 5;
-		uint256 start = 0;
-
-		address recipient = fromWormholeFormat(userAddress);
-
-		bytes memory payload = createBatchPayload(createBatchIds(tokenCount, start), recipient);
-
-		// create batch mint VAA, but with only a single token ID
-		bytes memory batchVaa = craftValidVaa(
-			ethereum,
-			polygonWormholeChain,
-			ethereum.acceptedEmitter,
-			payload
-		);
-
-		(uint256 dustAmount, uint256 gasTokenAmount) = ethereumNft.getAmountsOnMint();
-		vm.deal(recipient, gasTokenAmount);
-		ethereum.dustToken.approve(address(ethereumNft), dustAmount);
-
-		// self redeem, but send value
-		vm.prank(recipient);
-		vm.expectRevert(abi.encodeWithSignature("InvalidMsgValue()"));
-		ethereumNft.receiveAndMintBatch{value: gasTokenAmount}(batchVaa);
-	}
-
-	function testCannotReceiveAndMintBatchInvalidMessageValueRelayer() public {
-		uint256 tokenCount = 5;
-		uint256 start = 0;
-
-		bytes memory payload = createBatchPayload(
-			createBatchIds(tokenCount, start),
-			fromWormholeFormat(userAddress)
-		);
-
-		// create batch mint VAA, but with only a single token ID
-		bytes memory batchVaa = craftValidVaa(
-			ethereum,
-			polygonWormholeChain,
-			ethereum.acceptedEmitter,
-			payload
-		);
-
-		(uint256 dustAmount, ) = ethereumNft.getAmountsOnMint();
-		ethereum.dustToken.approve(address(ethereumNft), dustAmount);
-
-		// relayer submits transaction, but doesnt send any gas.
-		vm.expectRevert(abi.encodeWithSignature("InvalidMsgValue()"));
-		ethereumNft.receiveAndMintBatch{value: 0}(batchVaa);
+		ethereumNft.receiveAndMintBatch(batchVaa);
 	}
 }

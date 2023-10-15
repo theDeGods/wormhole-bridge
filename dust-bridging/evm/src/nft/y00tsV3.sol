@@ -9,45 +9,39 @@ import {ERC2981Upgradeable} from "@openzeppelin/contracts-upgradeable/token/comm
 import {Ownable2StepUpgradeable} from "@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
 import {IWormhole} from "wormhole-solidity/IWormhole.sol";
 import {BytesLib} from "wormhole-solidity/BytesLib.sol";
-import {ERC5058Upgradeable} from "ERC5058/ERC5058Upgradeable.sol";
-import {IERC5192} from "ERC5192/IERC5192.sol";
+
+//                                                      @@@@@@              @@
+//   @@@@@@    @@@@@   @@@@@@@@@@@      @@@@@@@@@@@     @@@@@@
+//   @@@@@@   @@@@@@ @@@@@@@@@@@@@@   @@@@@@@@@@@@@@  @@@@@@@@@@@  @@@@@@@@@@
+//    @@@@@@  @@@@@/@@@@@@    @@@@@@ @@@@@@    @@@@@@ @@@@@@@@@@@ @@@@@@(@@@
+//     @@@@@%@@@@@@ @@@@@      @@@@@ @@@@@      @@@@@   @@@@@@    @@@@@@@@
+//     @@@@@@@@@@@@ @@@@@@     @@@@@ @@@@@@     @@@@@   @@@@@@     @@@@@@@@@@
+//      @@@@@@@@@@   @@@@@@@@@@@@@@@  @@@@@@@@@@@@@@@   @@@@@@         @@@@@@@
+//      &@@@@@@@@     @@@@@@@@@@@@&    @@@@@@@@@@@@&     @@@@@@@@ @@@@@@@@@@@
+//  @@@@@@@@@@@.        &@@@@@@@         &@@@@@@@          @@@@@@ @@@@@@@@@
+//  @@@@@@@@
 
 /**
- * @title  DeBridge
- * @notice ERC721 that mints tokens based on VAAs.
+ * @title  y00ts ERC-721 Smart Contract
  */
-contract y00tsV3 is
-	ERC5058Upgradeable,
-	IERC5192,
-	UUPSUpgradeable,
-	ERC2981Upgradeable,
-	Ownable2StepUpgradeable
-{
+contract y00ts is UUPSUpgradeable, ERC2981Upgradeable, Ownable2StepUpgradeable, ERC721Upgradeable {
 	using BytesLib for bytes;
 	using SafeERC20 for IERC20;
 
 	// Wormhole chain id that valid vaas must have -- must be Polygon.
 	uint16 constant SOURCE_CHAIN_ID = 5;
-	uint256 private constant MAX_EXPIRE_TIME =
-		0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff;
 
 	// -- immutable members (baked into the code by the constructor of the logic contract)
 
 	// Core layer Wormhole contract. Exposed so higher-level contract can
 	// interact with the wormhole interface.
 	IWormhole immutable _wormhole;
-	// ERC20 DUST token contract.
-	IERC20 private immutable _dustToken;
 	// Only VAAs from this emitter can mint NFTs with our contract (prevents spoofing).
 	bytes32 private immutable _emitterAddress;
 	// Common URI for all NFTs handled by this contract.
 	bytes32 private immutable _baseUri;
 	uint8 private immutable _baseUriLength;
 
-	// Amount of DUST to transfer to the minter on upon relayed mint.
-	uint256 private _dustAmountOnMint;
-	// Amount of gas token (ETH, MATIC, etc.) to transfer to the minter on upon relayed mint.
-	uint256 private _gasTokenAmountOnMint;
 	// Dictionary of VAA hash => flag that keeps track of claimed VAAs
 	mapping(bytes32 => bool) private _claimedVaas;
 	// Storage gap so that future upgrades to the contract can add new storage variables.
@@ -67,12 +61,7 @@ contract y00tsV3 is
 	event BatchMinted(uint256[] tokenIds, address indexed receiver);
 
 	//constructor for the logic(!) contract
-	constructor(
-		IWormhole wormhole,
-		IERC20 dustToken,
-		bytes32 emitterAddress,
-		bytes memory baseUri
-	) {
+	constructor(IWormhole wormhole, bytes32 emitterAddress, bytes memory baseUri) {
 		if (baseUri.length == 0) {
 			revert BaseUriEmpty();
 		}
@@ -81,13 +70,12 @@ contract y00tsV3 is
 		}
 
 		_wormhole = wormhole;
-		_dustToken = dustToken;
 		_emitterAddress = emitterAddress;
 		_baseUri = bytes32(baseUri);
 		_baseUriLength = uint8(baseUri.length);
 
 		//brick logic contract
-		initialize("", "", 0, 0, address(1), 0);
+		initialize("", "", address(1), 0);
 		renounceOwnership();
 	}
 
@@ -98,13 +86,9 @@ contract y00tsV3 is
 	function initialize(
 		string memory name,
 		string memory symbol,
-		uint256 dustAmountOnMint,
-		uint256 gasTokenAmountOnMint,
 		address royaltyReceiver,
 		uint96 royaltyFeeNumerator
 	) public initializer {
-		_dustAmountOnMint = dustAmountOnMint;
-		_gasTokenAmountOnMint = gasTokenAmountOnMint;
 		__UUPSUpgradeable_init();
 		__ERC721_init(name, symbol);
 		__ERC2981_init();
@@ -114,55 +98,26 @@ contract y00tsV3 is
 	}
 
 	/**
-	 * @notice Updates the amount of DUST and gas token (ETH, MATIC, etc.) to transfer to the recipient
-	 * of a minted NFT. Only the owner of the contract can call this method.
-	 */
-	function updateAmountsOnMint(
-		uint256 dustAmountOnMint,
-		uint256 gasTokenAmountOnMint
-	) external onlyOwner {
-		_dustAmountOnMint = dustAmountOnMint;
-		_gasTokenAmountOnMint = gasTokenAmountOnMint;
-	}
-
-	/**
-	 * @notice Returns the amount of DUST and gas token (ETH, MATIC, etc.) to transfer to the recipient
-	 * of a minted NFT.
-	 */
-	function getAmountsOnMint()
-		external
-		view
-		returns (uint256 dustAmountOnMint, uint256 gasTokenAmountOnMint)
-	{
-		dustAmountOnMint = _dustAmountOnMint;
-		gasTokenAmountOnMint = _gasTokenAmountOnMint;
-	}
-
-	/**
-	 * @notice Mints an NFT based on a valid VAA and kickstarts the recipient's wallet with
-	 * gas tokens (ETH or MATIC) and DUST (taken from msg.sender unless msg.sender is recipient).
+	 * @notice Mints an NFT based on a valid VAA
 	 * @param vaa Wormhole message that must have been published by the Polygon Y00tsV2 instance
 	 * of the NFT collection with the specified emitter on Polygon (chainId = 5). The VAA contains
 	 * a single token ID and a recipient address.
 	 */
-	function receiveAndMint(bytes calldata vaa) external payable {
+	function receiveAndMint(bytes calldata vaa) external {
 		IWormhole.VM memory vm = _verifyMintMessage(vaa);
 
 		(uint256 tokenId, address evmRecipient) = parsePayload(vm.payload);
 		_safeMint(evmRecipient, tokenId);
 		emit Minted(tokenId, evmRecipient);
-
-		_handleGasDropOff(evmRecipient);
 	}
 
 	/**
-	 * @notice Mints a batch of NFTs based on a valid VAA and kickstarts the recipient's wallet with
-	 * gas tokens (ETH or MATIC) and DUST (taken from msg.sender unless msg.sender is recipient).
+	 * @notice Mints a batch of NFTs based on a valid VAA
 	 * @param vaa Wormhole message that must have been published by the Polygon Y00tsV2 instance
 	 * of the NFT collection with the specified emitter on Polygon (chainId = 5). The VAA contains
 	 * a list of token IDs and a recipient address.
 	 */
-	function receiveAndMintBatch(bytes calldata vaa) external payable {
+	function receiveAndMintBatch(bytes calldata vaa) external {
 		IWormhole.VM memory vm = _verifyMintMessage(vaa);
 
 		(uint256[] memory tokenIds, address evmRecipient) = parseBatchPayload(vm.payload);
@@ -176,23 +131,6 @@ contract y00tsV3 is
 			}
 		}
 		emit BatchMinted(tokenIds, evmRecipient);
-
-		_handleGasDropOff(evmRecipient);
-	}
-
-	function _handleGasDropOff(address evmRecipient) internal {
-		if (msg.sender != evmRecipient) {
-			if (msg.value != _gasTokenAmountOnMint) revert InvalidMsgValue();
-
-			// This external call is safe from reentrancy due to the vaa replay protection
-			// in the calling function.
-			(bool sent, ) = evmRecipient.call{value: msg.value}("");
-			if (!sent) revert FailedToSend();
-
-			_dustToken.safeTransferFrom(msg.sender, evmRecipient, _dustAmountOnMint);
-		}
-		//if the recipient relays the message themselves then they must not include any gas token
-		else if (msg.value != 0) revert InvalidMsgValue();
 	}
 
 	function parsePayload(
@@ -251,51 +189,6 @@ contract y00tsV3 is
 		return vm;
 	}
 
-	function locked(uint256 tokenId) external view override returns (bool) {
-		return isLocked(tokenId);
-	}
-
-	// ---- ERC5058 ----
-
-	function _beforeTokenTransfer(
-		address from,
-		address to,
-		uint256 tokenId,
-		uint256 batchSize
-	) internal virtual override(ERC5058Upgradeable) {
-		ERC5058Upgradeable._beforeTokenTransfer(from, to, tokenId, batchSize);
-	}
-
-	function _afterTokenTransfer(
-		address from,
-		address to,
-		uint256 tokenId,
-		uint256 batchSize
-	) internal virtual override(ERC5058Upgradeable) {
-		ERC5058Upgradeable._afterTokenTransfer(from, to, tokenId, batchSize);
-	}
-
-	function _beforeTokenLock(
-		address operator,
-		address owner,
-		uint256 tokenId,
-		uint256 expired
-	) internal virtual override {
-		super._beforeTokenLock(operator, owner, tokenId, expired);
-		require(expired == 0 || expired == MAX_EXPIRE_TIME, "Auto expiration is not supported.");
-
-		// Emit events for ERC5192
-		if (expired != 0) {
-			emit Locked(tokenId);
-		} else {
-			emit Unlocked(tokenId);
-		}
-	}
-
-	function _burn(uint256 tokenId) internal virtual override(ERC5058Upgradeable) {
-		ERC5058Upgradeable._burn(tokenId);
-	}
-
 	// ---- ERC721 ----
 
 	function tokenURI(uint256 tokenId) public view virtual override returns (string memory) {
@@ -314,11 +207,10 @@ contract y00tsV3 is
 
 	function supportsInterface(
 		bytes4 interfaceId
-	) public view virtual override(ERC5058Upgradeable, ERC2981Upgradeable) returns (bool) {
+	) public view virtual override(ERC2981Upgradeable, ERC721Upgradeable) returns (bool) {
 		return
-			interfaceId == type(IERC5192).interfaceId ||
-			ERC5058Upgradeable.supportsInterface(interfaceId) ||
-			super.supportsInterface(interfaceId);
+			ERC2981Upgradeable.supportsInterface(interfaceId) ||
+			ERC721Upgradeable.supportsInterface(interfaceId);
 	}
 
 	// ---- ERC2981 ----

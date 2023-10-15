@@ -15,10 +15,10 @@ import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 
 contract ContractScript is Script {
 	using BytesLib for bytes;
+	// bytes32 constant minterAddress =
+	// 	0x000000000000000000000000670fd103b1a08628e9557cD66B87DeD841115190; // Polygon y00tsV2 Mainnet
 	bytes32 constant minterAddress =
-		0x000000000000000000000000670fd103b1a08628e9557cD66B87DeD841115190; // Polygon y00tsV2 contract
-	uint256 constant dustAmountOnMint = 0;
-	uint256 constant gasTokenAmountOnMint = 1e17; // 0.1 ETHER
+		0x000000000000000000000000Caa4348e77c12fb4DE5226638E9f6E8d75d25290; // Polygon y00tsV2 Devnet
 	address constant royaltyReceiver = 0xa45D808eAFDe8B8E6B6B078fd246e28AD13030E8;
 	uint96 constant royaltyFeeNumerator = 333;
 	bytes constant baseUri = "https://metadata.y00ts.com/y/";
@@ -26,14 +26,15 @@ contract ContractScript is Script {
 	string constant symbol = "y00t";
 
 	// Ethereum Wormhole mainnet
-	IWormhole wormhole = IWormhole(0x98f3c9e6E3fAce36bAAd05FE09d375Ef1464288B);
-	IERC20 dustToken = IERC20(0xB5b1b659dA79A2507C27AaD509f15B4874EDc0Cc);
+	// IWormhole wormhole = IWormhole(0x98f3c9e6E3fAce36bAAd05FE09d375Ef1464288B);
 
+	// Ethereum Wormhole devnet
+	IWormhole wormhole = IWormhole(0x706abc4E45D419950511e474C7B9Ed348A4a716c);
 	y00ts nft;
 
 	function deployContract() public {
 		//Deploy our contract for testing
-		y00ts nftImplementation = new y00ts(wormhole, dustToken, minterAddress, baseUri);
+		y00ts nftImplementation = new y00ts(wormhole, minterAddress, baseUri);
 		ERC1967Proxy proxy = new ERC1967Proxy(
 			address(nftImplementation),
 			abi.encodeCall(
@@ -41,8 +42,6 @@ contract ContractScript is Script {
 				(
 					name,
 					symbol,
-					dustAmountOnMint,
-					gasTokenAmountOnMint,
 					royaltyReceiver,
 					royaltyFeeNumerator
 				)

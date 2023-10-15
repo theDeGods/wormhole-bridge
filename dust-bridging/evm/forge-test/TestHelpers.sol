@@ -50,7 +50,7 @@ contract TestY00tsV3 is y00ts {
 		IERC20 dustToken,
 		bytes32 emitterAddress,
 		bytes memory baseUri
-	) y00ts(wormhole, dustToken, emitterAddress, baseUri) {}
+	) y00ts(wormhole, emitterAddress, baseUri) {}
 
 	function mintTestOnly(address recipient, uint16 tokenId) public {
 		_safeMint(recipient, uint256(tokenId));

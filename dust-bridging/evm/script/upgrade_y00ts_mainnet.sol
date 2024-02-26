@@ -5,7 +5,6 @@ import "forge-std/Script.sol";
 import "forge-std/console.sol";
 import {IWormhole} from "wormhole-solidity/IWormhole.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {y00ts} from "../src/nft/y00ts.sol";
 import {y00tsV2} from "../src/nft/y00tsV2.sol";
 
 contract UpgradeY00tsMainnetScript is Script {
@@ -17,7 +16,7 @@ contract UpgradeY00tsMainnetScript is Script {
 	bytes constant y00tsBaseUri = "https://metadata.y00ts.com/y/";
 
 	function upgrade() public {
-		y00ts(proxyAddress).upgradeTo(
+		y00tsV2(proxyAddress).upgradeTo(
 			address(
 				new y00tsV2(
 					IWormhole(wormholeAddress),
@@ -32,7 +31,7 @@ contract UpgradeY00tsMainnetScript is Script {
 	function run() public {
 		vm.startBroadcast();
 
-		console.log("Upgrading y00ts devnet");
+		console.log("Upgrading y00ts mainnet");
 		upgrade();
 
 		vm.stopBroadcast();

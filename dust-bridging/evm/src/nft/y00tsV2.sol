@@ -3,7 +3,6 @@ pragma solidity 0.8.19;
 
 import {ERC721Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC721/ERC721Upgradeable.sol";
 import {y00ts} from "./y00ts.sol";
-import {BaseWormholeBridgedNft} from "./BaseWormholeBridgedNft.sol";
 import {ERC5058Upgradeable} from "ERC5058/ERC5058Upgradeable.sol";
 import {IERC5192} from "ERC5192/IERC5192.sol";
 import {IWormhole} from "wormhole-solidity/IWormhole.sol";
@@ -28,10 +27,10 @@ contract y00tsV2 is y00ts, ERC5058Upgradeable, IERC5192 {
 		internal
 		view
 		virtual
-		override(BaseWormholeBridgedNft, ERC721Upgradeable)
+		override(y00ts, ERC721Upgradeable)
 		returns (string memory)
 	{
-		return BaseWormholeBridgedNft._baseURI();
+		return y00ts._baseURI();
 	}
 
 	function _beforeTokenTransfer(
@@ -77,22 +76,16 @@ contract y00tsV2 is y00ts, ERC5058Upgradeable, IERC5192 {
 
 	function supportsInterface(
 		bytes4 interfaceId
-	) public view virtual override(BaseWormholeBridgedNft, ERC5058Upgradeable) returns (bool) {
+	) public view virtual override(y00ts, ERC5058Upgradeable) returns (bool) {
 		return
 			interfaceId == type(IERC5192).interfaceId ||
 			ERC5058Upgradeable.supportsInterface(interfaceId) ||
-			BaseWormholeBridgedNft.supportsInterface(interfaceId);
+			y00ts.supportsInterface(interfaceId);
 	}
 
 	function tokenURI(
 		uint256 tokenId
-	)
-		public
-		view
-		virtual
-		override(ERC721Upgradeable, BaseWormholeBridgedNft)
-		returns (string memory)
-	{
-		return BaseWormholeBridgedNft.tokenURI(tokenId);
+	) public view virtual override(ERC721Upgradeable, y00ts) returns (string memory) {
+		return y00ts.tokenURI(tokenId);
 	}
 }

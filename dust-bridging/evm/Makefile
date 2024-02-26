@@ -1,9 +1,11 @@
-.PHONY: all test build dependencies clean
+include env/testing.env
+
+.PHONY: all test build dependencies clean integration-test
 
 all: build
 
-test: build
-	forge test -vvvv
+unit-test: build
+	forge test -vv
 
 build: dependencies
 	forge build
@@ -15,6 +17,12 @@ clean:
 	forge clean
 	rm -rf node_modules anvil.log lib forge-scripts ts-types
 
+.PHONY: integration-test
+integration-test: dependencies build
+	bash shell-scripts/run_integration_tests.sh
+
+.PHONY: test
+test: unit-test integration-test
 
 node_modules:
 	yarn
